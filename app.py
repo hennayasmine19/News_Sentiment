@@ -8,17 +8,15 @@ import os
 import streamlit as st
 from yake import KeywordExtractor
 from gtts import gTTS
-from bs4 import XMLParsedAsHTMLWarning
+import re
 import warnings
 
-warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
+# Ignore warnings
+warnings.filterwarnings("ignore")
 
-# Usage
-tts = gTTS(text="Hello", lang='en')
-
+# Download necessary NLTK data
 nltk.download('vader_lexicon')
 sia = SentimentIntensityAnalyzer()
-
 
 # Function to extract news
 def extract_news(company_name):
@@ -39,7 +37,6 @@ def extract_news(company_name):
         articles = []
         for item in soup.find_all("item")[:10]:
             title = item.find("title").text if item.find("title") else "No title found"
-            
             summary_content = item.find("description").text if item.find("description") else "Unknown summary"
             summary_soup = BeautifulSoup(summary_content, "html.parser")
             
@@ -85,10 +82,19 @@ def comparative_analysis(articles):
         "Neutral": neutral_count
     }
 
-def extract_topics(summary):
-    extractor = KeywordExtractor()
-    keywords = extractor.extract_keywords(summary)
-    return [keyword[0] for keyword in keywords]
+# Function for extracting unique topics
+def extract_unique_topics(summary, top_n=5):
+    extractor = KeywordExtractor(n=2, top=top_n)  # Extract bigrams (2-word phrases)
+    extracted_keywords = extractor.extract_keywords(summary)
+    keywords = [keyword[0] for keyword in extracted_keywords]
+
+    # Clean summary (remove punctuation, convert to lowercase)
+    cleaned_summary = re.sub(r"[^\w\s]", "", summary).lower()
+
+    # Remove words that already exist in the summary
+    unique_keywords = [kw for kw in keywords if kw.lower() not in cleaned_summary]
+
+    return unique_keywords if unique_keywords else ["No unique topics found"]
 
 # Function for text-to-speech conversion
 def text_to_speech_hindi(text):
@@ -121,32 +127,30 @@ def main():
             "Audio": "[Play Hindi Speech]"
         }
         
-        topics_per_article = {} # Store topics for each article
+        topics_per_article = {}  # Store topics for each article
         
         for i, article in enumerate(articles, 1):
-            st.write(f"Article {i}:")
-            st.write(f"Title: {article['title']}")
-            st.write(f"Link: {article['link']}")
-            st.write(f"Summary: {article['summary']}")
-            st.write(f"Sentiment: {sentiment_analysis(article['summary'])}")
+            st.write(f"### Article {i}:")
+            st.write(f"**Title:** {article['title']}")
+            st.write(f"**Link:** {article['link']}")
+            st.write(f"**Summary:** {article['summary']}")
+            st.write(f"**Sentiment:** {sentiment_analysis(article['summary'])}")
             
-            topics = extract_topics(article['summary'])
-            st.write(f"Topics: {topics}")
+            unique_topics = extract_unique_topics(article['summary'])
+            st.write(f"**Unique Topics:** {unique_topics}")
             st.write("")
-            
-            topics_per_article[i] = topics # Store topics
+
+            topics_per_article[i] = unique_topics  # Store topics
 
             output_data["Articles"].append({
                 "Title": article['title'],
                 "Summary": article['summary'],
                 "Sentiment": sentiment_analysis(article['summary']),
-                "Topics": topics
+                "Topics": unique_topics
             })
                 
         sentiments = comparative_analysis(articles)
         output_data["Comparative Sentiment Score"]["Sentiment Distribution"] = sentiments
-        
-       
 
         # Topic Overlap
         all_topics = set()
@@ -170,6 +174,18 @@ def main():
                     other_topics.update(topics_per_article[j])
             unique_topics[f"Article {i}"] = list(set(topics_per_article[i]) - other_topics)
         output_data["Comparative Sentiment Score"]["Topic Overlap"]["Unique Topics"] = unique_topics
+
+        # Coverage Differences Analysis
+        coverage_differences = []
+        for i in range(len(articles) - 1):
+            for j in range(i + 1, len(articles)):
+                comparison = {
+                    "Comparison": f"Article {i+1} focuses on {articles[i]['summary'][:50]}..., while Article {j+1} discusses {articles[j]['summary'][:50]}...",
+                    "Impact": f"Article {i+1} provides a different perspective than Article {j+1}."
+                }
+                coverage_differences.append(comparison)
+
+        output_data["Comparative Sentiment Score"]["Coverage Differences"] = coverage_differences
         
         if sentiments["Positive"] > sentiments["Negative"]:
             final_sentiment = f"{company_name}'s latest news coverage is mostly positive. Potential stock growth expected."
@@ -178,13 +194,13 @@ def main():
         
         output_data["Final Sentiment Analysis"] = final_sentiment
         
-        st.write(final_sentiment)
+        st.write(f"## {final_sentiment}")
         
         # Convert Final Sentiment to Audio
         text_to_speech_hindi(final_sentiment)
         
-        st.write("Output Data:")
-        st.write(output_data)
+        st.write("### Output Data:")
+        st.json(output_data)  # Display JSON output
         
         st.audio("output.mp3")
 
