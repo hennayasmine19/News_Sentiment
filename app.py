@@ -1,10 +1,9 @@
 import streamlit as st
-import requests
+from news_scraper import fetch_news
 
 # Streamlit App UI
 st.set_page_config(page_title="News Sentiment Analysis", layout="wide")
 
-# Title
 st.title("📰 News Sentiment Analysis & Hindi Text-to-Speech")
 
 # User input
@@ -12,14 +11,13 @@ st.sidebar.header("Enter a Company Name")
 company_name = st.sidebar.text_input("Company Name", "Tesla")
 
 if st.sidebar.button("Fetch News"):
-    st.sidebar.write("🔄 Fetching news articles from API...")
+    st.sidebar.write("🔄 Fetching news articles...")
 
-    # Call the API
-    api_url = f"http://127.0.0.1:8000/get_news/{company_name}"
-    response = requests.get(api_url)
+    # Call fetch_news() directly (No API needed)
+    result = fetch_news(company_name)
 
-    if response.status_code == 200:
-        result = response.json()
+    if result["articles"]:
+        st.sidebar.success(f"✅ Found {len(result['articles'])} articles!")
 
         # Show comparative sentiment analysis
         st.subheader("📊 Comparative Sentiment Analysis")
@@ -36,4 +34,4 @@ if st.sidebar.button("Fetch News"):
                 st.audio(article["audio_file"])
 
     else:
-        st.error("❌ Failed to fetch data from API.")
+        st.error("❌ No articles found. Try another company.")
