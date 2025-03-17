@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+streamlit
+requests
+gnews
+gtts
+pydub
+transformers
+torch
